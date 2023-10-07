@@ -1,9 +1,10 @@
+import os
 import tkinter as tk
 from tkinter import ttk
 import tkcalendar
 from ttkthemes import ThemedTk
 import datetime
-#import client;
+#import db
 
 
 def donothing():
@@ -22,98 +23,124 @@ class GUI:
 
         # create tab objects
         self.tab_cli = Tab("Clients", self.root, self.tab_system, [
-            TextEntry("Client Name"),
-            DateEntry("Date"),
-            TimeEntry("Time")
+            TextField("Client Name"),
+            TextField("Email"),
+            TextField("Phone #"),
+            TextField("Notes"),
         ])
         self.tab_fin = Tab("Finances", self.root, self.tab_system, [
-            TextEntry("Transaction"),
-            DateEntry("Date"),
-            TimeEntry("Time"),
-            NumEntry("Money", 10),
+            TextField("Transaction"),
+            DateField("Date"),
+            TextField("Time"),
+            NumField("Earnings"),
+            TextField("Notes"),
         ])
-
-        #self.tab_system.add(self.tab_cli.frame, text='Clients')
-        #self.tab_system.add(self.tab_fin.frame, text='Finances')
+        self.tab_appt = Tab("Appointments", self.root, self.tab_system, [
+            TextField("Client Name"),
+            DateField("Date"),
+            TextField("Time"),
+            TextField("Notes"),
+        ])
+        self.tabs = [self.tab_cli, self.tab_fin, self.tab_appt]
+        self.load_data()
         self.tab_system.pack(expand=True)
 
         self.root.mainloop()
 
+    def load_data(self):
+        for file in os.listdir("db"):
+            if "cli.json" in file:
+                print("Cli")
+                #array = db.convert_to_json()s
+            if "fin.json" in file:
+                print("Fin")
+            if "appt.json" in file:
+                print("Appt")
 
-# FIELD TYPES
-FIELD_TEXT = 0
-FIELD_DATE = 1
-FIELD_TIME = 2
-FIELD_NUM = 3
+    def save_data(self):
+        pass
 
 
-class Entry:
+class Field:
     def __init__(self, field_name):
         self.field_name = field_name
 
     def create(self, frame):
         self.label = tk.Label(frame, text=self.field_name)
 
-
-class TextEntry(Entry):
-    def __init__(self, field_name):
-        super().__init__(field_name)
-
-    def create(self, frame):
-        super().create(frame)
-        self.entry = ttk.Entry(frame, text=self.field_name)
-
     def place(self, row):
         self.label.grid(column=0, row=row, padx=2, pady=2, sticky='w')
-        self.entry.grid(column=1, row=row, padx=2, pady=2, sticky='w')
 
 
-
-class NumEntry(Entry):
-    def __init__(self, field_name, width):
+class TextField(Field):
+    def __init__(self, field_name, width=25):
         super().__init__(field_name)
         self.width = width
 
     def create(self, frame):
         super().create(frame)
-        self.entry = tk.Spinbox(frame, from_=-99999, to_=99999, increment=1, width=self.width)
+        self.field = ttk.Entry(frame, text=self.field_name, width=self.width)
 
     def place(self, row):
-        self.label.grid(column=0, row=row, padx=2, pady=2, sticky='w')
-        self.entry.grid(column=1, row=row, padx=2, pady=2, sticky='w')
+        super().place(row)
+        self.field.grid(column=1, row=row, padx=2, pady=2, sticky='w')
+
+    def value(self):
+        return self.field.get()
+
+    def update(self, value):
+        self.field.delete(0, tk.END)
+        self.field.insert(0, value)
+
+    def default(self):
+        return ''
 
 
-class DateEntry(Entry):
+
+class NumField(Field):
+    def __init__(self, field_name, width=10):
+        super().__init__(field_name)
+        self.width = width
+
+    def create(self, frame):
+        super().create(frame)
+        self.field = tk.Spinbox(frame, from_=-99999, to_=99999, increment=1, width=self.width)
+
+    def place(self, row):
+        super().place(row)
+        self.field.grid(column=1, row=row, padx=2, pady=2, sticky='w')
+
+    def value(self):
+        return self.field.get()
+
+    def update(self, value):
+        self.field.delete(0, tk.END)
+        self.field.insert(0, value)
+
+    def default(self):
+        return 0
+
+
+class DateField(Field):
     def __init__(self, field_name):
         super().__init__(field_name)
 
     def create(self, frame):
         super().create(frame)
-        self.entry = tkcalendar.DateEntry(frame, width=16, foreground="white", bd=2)
+        self.field = tkcalendar.DateEntry(frame, width=16, foreground="white")
 
     def place(self, row):
-        self.label.grid(column=0, row=row, padx=2, pady=2, sticky='w')
-        self.entry.grid(column=1, row=row, padx=2, pady=2, sticky='w')
+        super().place(row)
+        self.field.grid(column=1, row=row, padx=2, pady=2, sticky='w')
 
+    def value(self):
+        return self.field.get_date()
 
-class TimeEntry(Entry):
-    def __init__(self, field_name):
-        super().__init__(field_name)
+    def update(self, value):
+        pass
 
-    def create(self, frame):
-        super().create(frame)
-        self.subframe = tk.Frame(frame)
-        self.hour_entry = tk.Spinbox(self.subframe, from_=1, to_=12, increment=1, wrap=True, width=3)
-        self.colon = tk.Label(self.subframe, text=":")
-        self.min_entry = tk.Spinbox(self.subframe, from_=0, to_=59, increment=1, wrap=True, width=3)
-
-    def place(self, row):
-        self.label.grid(column=0, row=row, padx=2, pady=2, sticky='w')
-        self.hour_entry.grid(column=1, row=row, padx=2, pady=2, sticky='w')
-        self.colon.grid(column=2, row=row, padx=2, pady=2, sticky='w')
-        self.min_entry.grid(column=3, row=row, padx=2, pady=2, sticky='w')
-        self.subframe.grid(column=1, row=row, columnspan=1, sticky='w')
-
+    def default(self):
+        return datetime.date.today()
 
 
 class Tab:
@@ -125,11 +152,11 @@ class Tab:
         self.fields = fields
 
         # create frame to enter data into selected field
-        self.entry_frame = tk.Frame(self.frame)
+        self.field_frame = tk.Frame(self.frame)
         self.column_names = []
         row = 0
         for field in self.fields:
-            field.create(self.entry_frame) # add field entry
+            field.create(self.field_frame) # add field field
             self.column_names.append(field.field_name)
             field.place(row)
             row += 1
@@ -140,53 +167,60 @@ class Tab:
         col = 0
         for field in self.fields:
             col += 1
-            #self.table.column("# " + str(col))
             self.table.heading("# " + str(col), text=field.field_name)
-
-        # Insert the data into the table
-        self.table.insert('', 'end', text="1", values=('Amit',
-                                                       datetime.date(year=2004, month=12, day=2),
-                                                       datetime.time(hour=2,minute=30).strftime("%I:%M %p")))
-        self.table.insert('', 'end', text="1", values=('Ankush',
-                                                       datetime.date(year=2004, month=12, day=2),
-                                                       datetime.time(hour=2,minute=30).strftime("%I:%M %p")))
-        self.table.insert('', 'end', text="1", values=('Manisha',
-                                                       datetime.date(year=2004, month=12, day=2),
-                                                       datetime.time(hour=14,minute=30).strftime("%I:%M %p")))
-        self.table.insert('', 'end', text="1", values=('Manisha2',
-                                                       datetime.date(year=2004, month=12, day=2),
-                                                       datetime.time(hour=14,minute=30).strftime("%I:%M %p")))
 
         self.table.pack()  # display the table
 
-        # bring up entry menu when a certain row of table is selected
-        self.table.bind('<<TreeviewSelect>>', lambda selected: self.table_row_selected())
-
-
-        add_row_button = tk.Button(self.frame, text="Add Row", command=self.add_row)
+        add_row_button = tk.Button(self.frame, text="Add Entry", command=self.add_row)
         add_row_button.pack(fill=tk.X)
+        submit_button = tk.Button(self.field_frame, text="Submit", command=self.submit_fields)
+        submit_button.grid(sticky=tk.NSEW)
 
-        submit_entry_button = tk.Button(self.entry_frame, text="Submit", command=self.submit_entry)
-        submit_entry_button.grid(column=3, row=0, rowspan=3, sticky=tk.NSEW)
-
-    def table_row_selected(self):
-        self.entry_frame.pack(fill=tk.BOTH, side=tk.RIGHT, expand=True)
-        print("hi")
+        # bring up field menu when a certain row of table is selected
+        self.table.bind('<<TreeviewSelect>>', self.table_row_selected)
+        # go to next field when enter is pressed
+        self.root.bind('<Return>', lambda event: event.widget.tk_focusNext().focus_set())
+        # press buttons when enter is pressed over them
+        add_row_button.bind('<Return>', lambda event: self.add_row())
+        submit_button.bind('<Return>', lambda event: self.submit_fields())
 
     def add_row(self):
-        print("Add row")
-        self.table.insert('', 'end', values=('Manisha',
-                                                       datetime.date(year=2004, month=12, day=2),
-                                                       datetime.time(hour=14,minute=30).strftime("%I:%M %p")))
-        pass
+        default_values = []
+        for i in range(len(self.fields)):
+            default_values.append(self.fields[i].default())
+        new_row = self.table.insert('', 'end', values=default_values)
+        self.table.selection_set(new_row)
+        self.fields[0].field.focus_set()
 
-    def submit_entry(self):
-        print(self.table.item(self.table.focus()).values())
-        #tab.send(s)
+    def table_row_selected(self, event):
+        self.field_frame.pack(fill=tk.BOTH, side=tk.RIGHT, expand=True)
+        selected_row = self.table.selection()[0]
+        print(self.table.item(selected_row)['values'])
+        for i in range(len(self.fields)):
+            value = self.table.item(selected_row)['values'][i]
+            print(value)
+            self.fields[i].update(value)
+        self.fields[0].field.focus_set()
 
-        pass
+    def submit_fields(self):
+        selected_row = self.table.selection()[0]
+        submitted_values = []
+        for field in self.fields:
+            submitted_values.append(field.value())
+        self.table.item(selected_row, text="", values=submitted_values)
+        self.field_frame.pack_forget()
+        self.get_dict()
 
-
+    def get_dict(self):
+        dict_array = []
+        for x in self.table.get_children():
+            value_dict = {}
+            for col, item in zip(self.table["columns"], self.table.item(x)["values"]):
+                value_dict[col] = item
+            dict_array.append(value_dict)
+        #print(dict_array)
+        #json = db.convert_to_json(value_dict)
+        #db.send_to_db(json)
 
 
 GUI()
