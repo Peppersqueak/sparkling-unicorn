@@ -1,14 +1,30 @@
 import os
+import random
 import tkinter as tk
 from tkinter import ttk
 import tkcalendar
+from tkinter import messagebox
 from ttkthemes import ThemedTk
 import datetime
-#import db
+import db_saver as db
 
 
 def donothing():
    x = 0
+
+
+def treeview_sort_column(tv, col, reverse):
+    l = [(tv.set(k, col), k) for k in tv.get_children('')]
+    l.sort(reverse=reverse)
+
+    # rearrange items in sorted positions
+    for index, (val, k) in enumerate(l):
+        tv.move(k, '', index)
+
+    # reverse sort next time
+    tv.heading(col, command=lambda: \
+               treeview_sort_column(tv, col, not reverse))
+
 
 
 class GUI:
@@ -17,25 +33,27 @@ class GUI:
         # create root window object
         # themes listed here https://ttkthemes.readthedocs.io/en/latest/themes.html
         self.root = ThemedTk(theme="adapta")
+        self.root.title("Omnibalance")
 
         # create the tab system for the different categories of the app (clients, finances, appointments)
         self.tab_system = ttk.Notebook(self.root)
 
         # create tab objects
-        self.tab_cli = Tab("Clients", self.root, self.tab_system, [
-            TextField("Client Name"),
+        self.tab_cli = Tab("Clients", "cli", self.root, self.tab_system, [
+            TextField("Last Name"),
+            TextField("First Name"),
             TextField("Email"),
             TextField("Phone #"),
             TextField("Notes"),
         ])
-        self.tab_fin = Tab("Finances", self.root, self.tab_system, [
+        self.tab_fin = Tab("Financial", "fin", self.root, self.tab_system, [
             TextField("Transaction"),
             DateField("Date"),
             TextField("Time"),
-            NumField("Earnings"),
+            NumField("Earnings ($)"),
             TextField("Notes"),
         ])
-        self.tab_appt = Tab("Appointments", self.root, self.tab_system, [
+        self.tab_appt = Tab("Appointments", "appt", self.root, self.tab_system, [
             TextField("Client Name"),
             DateField("Date"),
             TextField("Time"),
@@ -45,20 +63,40 @@ class GUI:
         self.load_data()
         self.tab_system.pack(expand=True)
 
-        self.root.mainloop()
+        self.root.mainloop()  # run the program
+
 
     def load_data(self):
-        for file in os.listdir("db"):
-            if "cli.json" in file:
-                print("Cli")
-                #array = db.convert_to_json()s
-            if "fin.json" in file:
-                print("Fin")
-            if "appt.json" in file:
-                print("Appt")
+        for file_name in os.listdir("db"):
+            tab_to_load = None
+            if "cli.json" in file_name:  # if part of name matches
+                print("cli file found")
+                tab_to_load = self.tab_cli
+            if "fin.json" in file_name:
+                print("cli file found")
+                tab_to_load = self.tab_fin
+            if "appt.json" in file_name:
+                print("appt file found")
+                tab_to_load = self.tab_appt
 
-    def save_data(self):
-        pass
+            if tab_to_load is not None:
+                array = db.FromDatabase(tab_to_load.file_name).grab_from_DB()
+                if array is not None:
+                    for row in array:
+                        tab_to_load.add_row()
+
+                        field_names = []
+                        for field in tab_to_load.fields:
+                            field_names.append(field.field_name)
+                        k = 0
+
+                        try:
+                            for name in field_names:
+                                tab_to_load.fields[k].update(row[name])
+                                tab_to_load.submit_fields()
+                                k += 1
+                        except:
+                            print("unable to read " + tab_to_load.file_name)
 
 
 class Field:
@@ -144,11 +182,13 @@ class DateField(Field):
 
 
 class Tab:
-    def __init__(self, name, root, tab_system, fields):
+    def __init__(self, category, file_name, root, tab_system, fields):
+        self.category = category
+        self.file_name = file_name
         self.root = root
         self.frame = ttk.Frame(tab_system)
         self.frame.grid_columnconfigure(0, weight=1)
-        tab_system.add(self.frame, text=name)
+        tab_system.add(self.frame, text=category)
         self.fields = fields
 
         # create frame to enter data into selected field
@@ -156,7 +196,7 @@ class Tab:
         self.column_names = []
         row = 0
         for field in self.fields:
-            field.create(self.field_frame) # add field field
+            field.create(self.field_frame)
             self.column_names.append(field.field_name)
             field.place(row)
             row += 1
@@ -166,15 +206,21 @@ class Tab:
 
         col = 0
         for field in self.fields:
+            print("COLS   " + str(col) + "   " + str(len(self.table.get_children())))
+            self.table.heading(field.field_name, text=field.field_name, command=lambda: treeview_sort_column(self.table, 0, False))
             col += 1
-            self.table.heading("# " + str(col), text=field.field_name)
 
         self.table.pack()  # display the table
 
-        add_row_button = tk.Button(self.frame, text="Add Entry", command=self.add_row)
-        add_row_button.pack(fill=tk.X)
+        action_frame = tk.Frame(self.frame)
+        add_row_button = tk.Button(action_frame, text="Add Entry", command=self.add_row)
+        add_row_button.grid(row=0, column=0, sticky='nsew')
+        remove_row_button = tk.Button(action_frame, text="Remove Entry", command=self.remove_selected_row)
+        remove_row_button.grid(row=0, column=1, sticky='nsew')
+        action_frame.pack(expand=True, fill=tk.X, anchor=tk.S)
+
         submit_button = tk.Button(self.field_frame, text="Submit", command=self.submit_fields)
-        submit_button.grid(sticky=tk.NSEW)
+        submit_button.grid(column=1, sticky=tk.NSEW)
 
         # bring up field menu when a certain row of table is selected
         self.table.bind('<<TreeviewSelect>>', self.table_row_selected)
@@ -184,6 +230,9 @@ class Tab:
         add_row_button.bind('<Return>', lambda event: self.add_row())
         submit_button.bind('<Return>', lambda event: self.submit_fields())
 
+        # actual dictionary for better manipulation
+        self.data = [{}]
+
     def add_row(self):
         default_values = []
         for i in range(len(self.fields)):
@@ -192,14 +241,26 @@ class Tab:
         self.table.selection_set(new_row)
         self.fields[0].field.focus_set()
 
+    def remove_selected_row(self):
+        if messagebox.askyesno("Confirm removal", "Are you sure?"):
+            try:
+                self.table.delete(self.table.selection()[0])
+                self.save_to_file()
+            except:
+                pass
+        self.table.selection_clear()
+        self.field_frame.grid_forget()  # not unfocusing
+
     def table_row_selected(self, event):
         self.field_frame.pack(fill=tk.BOTH, side=tk.RIGHT, expand=True)
-        selected_row = self.table.selection()[0]
-        print(self.table.item(selected_row)['values'])
-        for i in range(len(self.fields)):
-            value = self.table.item(selected_row)['values'][i]
-            print(value)
-            self.fields[i].update(value)
+        try:
+            selected_row = self.table.selection()[0]
+            for i in range(len(self.fields)):
+                value = self.table.item(selected_row)['values'][i]
+                #print(value)
+                self.fields[i].update(value)
+        except:
+            pass
         self.fields[0].field.focus_set()
 
     def submit_fields(self):
@@ -209,18 +270,29 @@ class Tab:
             submitted_values.append(field.value())
         self.table.item(selected_row, text="", values=submitted_values)
         self.field_frame.pack_forget()
-        self.get_dict()
+        self.save_to_file()
 
-    def get_dict(self):
-        dict_array = []
+    def create_dicts(self):
+        dicts = []
         for x in self.table.get_children():
+            print("dicts:   " + str(x))
             value_dict = {}
             for col, item in zip(self.table["columns"], self.table.item(x)["values"]):
                 value_dict[col] = item
-            dict_array.append(value_dict)
-        #print(dict_array)
-        #json = db.convert_to_json(value_dict)
-        #db.send_to_db(json)
+            dicts.append(value_dict)
+        return dicts
+
+    def save_to_file(self):
+        dicts = []
+        for x in self.table.get_children():
+            print("dicts:   " + str(x))
+            value_dict = {}
+            for col, item in zip(self.table["columns"], self.table.item(x)["values"]):
+                value_dict[col] = item
+            dicts.append(value_dict)
+        save = db.ToDatabase(self.file_name).convert_to_json(dicts)
 
 
 GUI()
+
+# when exiting
