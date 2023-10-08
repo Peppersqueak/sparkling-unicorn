@@ -6,7 +6,7 @@ import tkcalendar
 from tkinter import messagebox
 from ttkthemes import ThemedTk
 import datetime
-import db_saver as db
+import local_pipe
 
 
 def donothing():
@@ -22,9 +22,7 @@ def treeview_sort_column(tv, col, reverse):
         tv.move(k, '', index)
 
     # reverse sort next time
-    tv.heading(col, command=lambda: \
-               treeview_sort_column(tv, col, not reverse))
-
+    tv.heading(col, command=lambda: treeview_sort_column(tv, col, not reverse))
 
 
 class GUI:
@@ -32,7 +30,7 @@ class GUI:
     def __init__(self):
         # create root window object
         # themes listed here https://ttkthemes.readthedocs.io/en/latest/themes.html
-        self.root = ThemedTk(theme="adapta")
+        self.root = tk.Tk()#ThemedTk(theme="adapta")
         self.root.title("Omnibalance")
 
         # create the tab system for the different categories of the app (clients, finances, appointments)
@@ -59,12 +57,35 @@ class GUI:
             TextField("Time"),
             TextField("Notes"),
         ])
-        self.tabs = [self.tab_cli, self.tab_fin, self.tab_appt]
+
         self.load_data()
         self.tab_system.pack(expand=True)
 
+        #self.timeline = ttk.Frame(self.tab_system)
+        #self.timeline.grid_columnconfigure(0, weight=1)
+        #self.tab_system.add(self.timeline, text="Timeline")
+        #self.tab_system.bind('<<NotebookTabChanged>>', self.refresh_timeline)
+        #self.tab_appt.submit_button.bind('<<NotebookTabChanged>>', self.refresh_timeline)
+
         self.root.mainloop()  # run the program
 
+    """
+    def refresh_timeline(self, event):
+        m = 0
+        for widget in self.timeline.winfo_children():
+            widget.destroy()
+        for appt in self.tab_appt.create_dicts():
+
+            l1 = tk.Label(self.timeline, text=appt["Client Name"])
+            l2 = tk.Label(self.timeline, text=appt["Date"])
+            l3 = tk.Label(self.timeline, text=appt["Time"])
+            l4 = tk.Label(self.timeline, text=appt["Notes"])
+            l1.grid(column=0, row=m, sticky='nsew')
+            l2.grid(column=1, row=m, sticky='nsew')
+            l3.grid(column=2, row=m, sticky='nsew')
+            l4.grid(column=3, row=m, sticky='nsew')
+            m += 1
+    """
 
     def load_data(self):
         for file_name in os.listdir("db"):
@@ -80,7 +101,7 @@ class GUI:
                 tab_to_load = self.tab_appt
 
             if tab_to_load is not None:
-                array = db.FromDatabase(tab_to_load.file_name).grab_from_DB()
+                array = local_pipe.FromDatabase(tab_to_load.file_name).grab_from_DB()
                 if array is not None:
                     for row in array:
                         tab_to_load.add_row()
@@ -134,7 +155,6 @@ class TextField(Field):
         return ''
 
 
-
 class NumField(Field):
     def __init__(self, field_name, width=10):
         super().__init__(field_name)
@@ -175,10 +195,30 @@ class DateField(Field):
         return self.field.get_date()
 
     def update(self, value):
-        pass
+        super().update(value)
 
     def default(self):
         return datetime.date.today()
+
+
+class TimeField(TextField):
+    def __init__(self, field_name):
+        super().__init__(field_name)
+
+    def create(self, frame):
+        super().create(frame)
+
+    def place(self, row):
+        super().place(row)
+
+    def value(self):
+        return datetime.datetime.strptime(self.field.get(), "%H:%M %p")
+
+    def update(self, value):
+        super().update(value)
+
+    def default(self):
+        return datetime.datetime.now().strftime("%H:%M %p")
 
 
 class Tab:
@@ -189,8 +229,8 @@ class Tab:
         self.frame = ttk.Frame(tab_system)
         self.frame.grid_columnconfigure(0, weight=1)
         tab_system.add(self.frame, text=category)
-        self.fields = fields
 
+        self.fields = fields
         # create frame to enter data into selected field
         self.field_frame = tk.Frame(self.frame)
         self.column_names = []
@@ -219,8 +259,8 @@ class Tab:
         remove_row_button.grid(row=0, column=1, sticky='nsew')
         action_frame.pack(expand=True, fill=tk.X, anchor=tk.S)
 
-        submit_button = tk.Button(self.field_frame, text="Submit", command=self.submit_fields)
-        submit_button.grid(column=1, sticky=tk.NSEW)
+        self.submit_button = tk.Button(self.field_frame, text="Update Entry", command=self.submit_fields)
+        self.submit_button.grid(column=1, sticky=tk.NSEW)
 
         # bring up field menu when a certain row of table is selected
         self.table.bind('<<TreeviewSelect>>', self.table_row_selected)
@@ -228,10 +268,7 @@ class Tab:
         self.root.bind('<Return>', lambda event: event.widget.tk_focusNext().focus_set())
         # press buttons when enter is pressed over them
         add_row_button.bind('<Return>', lambda event: self.add_row())
-        submit_button.bind('<Return>', lambda event: self.submit_fields())
-
-        # actual dictionary for better manipulation
-        self.data = [{}]
+        self.submit_button.bind('<Return>', lambda event: self.submit_fields())
 
     def add_row(self):
         default_values = []
@@ -290,9 +327,7 @@ class Tab:
             for col, item in zip(self.table["columns"], self.table.item(x)["values"]):
                 value_dict[col] = item
             dicts.append(value_dict)
-        save = db.ToDatabase(self.file_name).convert_to_json(dicts)
+        save = local_pipe.ToDatabase(self.file_name).convert_to_json(dicts)
 
 
 GUI()
-
-# when exiting
